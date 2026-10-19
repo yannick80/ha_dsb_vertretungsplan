@@ -82,6 +82,7 @@ class: "08b"
 | `show_info`       | `true`   | Tageshinweise („Nachrichten zum Tag“) zeigen                       |
 | `show_footer`     | `true`   | Planstand unten zeigen                                             |
 | `compact`         | `false`  | nur Stunde, Art und Fach                                           |
+| `merge_lessons`   | `true`   | aufeinanderfolgende Stunden mit gleichem Inhalt als eine Zeile zeigen (`5-6. Std`) |
 
 Nach einem Update der Integration lädt der Browser die Karte über den Versions-Parameter automatisch neu; sollte sie dennoch alt aussehen, einmal die Seite hart neu laden. Findet die Karte für die eingestellte Klasse nichts, obwohl der Plan Einträge hat, zeigt sie die im Plan vorkommenden Klassen an, so lässt sich die Schreibweise der Schule schnell abgleichen.
 

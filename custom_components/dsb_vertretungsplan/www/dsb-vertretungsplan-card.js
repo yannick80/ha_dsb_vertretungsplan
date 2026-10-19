@@ -12,7 +12,7 @@
 
 const CARD_TAG = "dsb-vertretungsplan-card";
 const EDITOR_TAG = "dsb-vertretungsplan-card-editor";
-const CARD_VERSION = "1.0.1";
+const CARD_VERSION = "1.1.0";
 
 const CLASS_RE = /^(\d{1,2})([a-zäöü]*)$/;
 const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
@@ -35,6 +35,40 @@ function normalizeClass(value) {
   const m = CLASS_RE.exec(v);
   if (!m) return v;
   return `${m[1].padStart(2, "0")}${m[2]}`;
+}
+
+/** Parse "5", "5 - 6", "5-6", "5./6." into [first, last] or null. */
+function lessonRange(lesson) {
+  const nums = String(lesson || "").match(/\d+/g);
+  if (!nums || nums.length === 0) return null;
+  const first = parseInt(nums[0], 10);
+  const last = parseInt(nums[nums.length - 1], 10);
+  return last >= first ? [first, last] : [last, first];
+}
+
+function sameSubstitution(a, b) {
+  const fields = ["type", "classes", "subject", "room", "substitute", "teacher", "text"];
+  if (fields.some((f) => String(a[f] || "") !== String(b[f] || ""))) return false;
+  return JSON.stringify(a.changes || {}) === JSON.stringify(b.changes || {});
+}
+
+/**
+ * Merge consecutive lessons with identical content ("5. Std En", "6. Std En")
+ * into one row ("5-6"). Entries are expected in lesson order per day.
+ */
+function mergeConsecutive(entries) {
+  const result = [];
+  for (const entry of entries) {
+    const range = lessonRange(entry.lesson);
+    const last = result[result.length - 1];
+    if (last && range && last._range && sameSubstitution(last, entry) && range[0] === last._range[1] + 1) {
+      last._range = [last._range[0], range[1]];
+      last.lesson = `${last._range[0]}-${last._range[1]}`;
+      continue;
+    }
+    result.push({ ...entry, _range: range, lesson: range ? (range[0] === range[1] ? String(range[0]) : `${range[0]}-${range[1]}`) : entry.lesson });
+  }
+  return result;
 }
 
 function typeStyle(type) {
@@ -202,6 +236,7 @@ class DsbVertretungsplanCard extends HTMLElement {
       show_info: true,
       show_footer: true,
       compact: false,
+      merge_lessons: true,
       ...config,
     };
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
@@ -330,7 +365,8 @@ class DsbVertretungsplanCard extends HTMLElement {
     const cfg = this._config;
     const rel = relativeLabel(day.date);
     const infos = cfg.show_info && Array.isArray(day.info) ? day.info : [];
-    const rows = day.entries.map((e) => this._renderEntry(e)).join("");
+    const entries = cfg.merge_lessons === false ? day.entries : mergeConsecutive(day.entries);
+    const rows = entries.map((e) => this._renderEntry(e)).join("");
     const empty = day.entries.length === 0
       ? `<div class="empty"><ha-icon icon="mdi:check-circle-outline"></ha-icon>Keine Vertretungen</div>`
       : "";
@@ -399,6 +435,7 @@ const EDITOR_SCHEMA = [
       { name: "show_info", selector: { boolean: {} } },
       { name: "show_footer", selector: { boolean: {} } },
       { name: "compact", selector: { boolean: {} } },
+      { name: "merge_lessons", selector: { boolean: {} } },
     ],
   },
 ];
@@ -413,6 +450,7 @@ const EDITOR_LABELS = {
   show_info: "Tageshinweise zeigen",
   show_footer: "Planstand zeigen",
   compact: "Kompakt",
+  merge_lessons: "Folgestunden zusammenfassen",
 };
 
 class DsbVertretungsplanCardEditor extends HTMLElement {
@@ -451,6 +489,7 @@ class DsbVertretungsplanCardEditor extends HTMLElement {
       show_info: true,
       show_footer: true,
       compact: false,
+      merge_lessons: true,
       ...this._config,
     };
   }

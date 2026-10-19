@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.0
+
+- Karte: aufeinanderfolgende Stunden mit identischer Vertretung werden zu einer Zeile zusammengefasst (z. B. `5-6. Std`). Abschaltbar über die Option `merge_lessons`.
+
 ## 1.0.1
 
 - Sensor-Attribute enthalten nur noch eine Zusammenfassung je Tag; der volle Plan einer Schule überschritt die 16-KB-Grenze von Home Assistant, Attribute wurden nicht mehr gespeichert.
