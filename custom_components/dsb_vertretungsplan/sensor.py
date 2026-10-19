@@ -50,6 +50,9 @@ def _plan_attributes(coordinator: DSBCoordinator) -> dict[str, Any]:
     first, last = coordinator.window()
     return {
         ATTR_DAYS_AHEAD: coordinator.days_ahead,
+        "plan_updated": (
+            coordinator.plan_updated_at.isoformat() if coordinator.plan_updated_at else None
+        ),
         "from": first.isoformat(),
         "to": last.isoformat(),
         ATTR_PLAN_DAYS: [d.isoformat() for d in coordinator.plan_days()],

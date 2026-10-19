@@ -7,6 +7,7 @@ Die Integration ist eine Neuentwicklung mit dem Ziel, sich so zu verhalten, wie 
 - **Mobile-API statt Web-Scraping.** Dieselbe tokenbasierte API wie die DSBmobile-App (`mobileapi.dsbcontrol.de`). Kein ASP.NET-Login-Formular, kein Flackern zwischen echten Daten und „keine Vertretungen“.
 - **DataUpdateCoordinator mit echter Fehlerbehandlung.** Verbindungsprobleme werden als `UpdateFailed` gemeldet, die letzten gültigen Daten bleiben erhalten und die Entitäten werden `unavailable` statt still auf 0 zu springen. Ein leerer Plan (Ferien) ist ein gültiger Zustand.
 - **Re-Auth, Reconfigure, Optionen ohne Neustart, Diagnostics-Export, Übersetzungen (de/en).**
+- **Eigene Dashboard-Karte** mit visuellem Editor, von der Integration selbst ausgeliefert.
 - **Robuster Untis-Parser.** Spalten werden anhand der Kopfzeile erkannt, `<s>alt</s> neu` und `alt?neu` als Änderung, Sammelklassen wie `08abc` werden zu `08a, 08b, 08c` aufgelöst, mehrere Tage pro Datei werden unterstützt.
 
 ## Installation
@@ -58,47 +59,33 @@ changes: { subject: "De", room: "A101" }   # alte Werte bei Änderungen
 columns: { "Art": "Vertretung", "(Fach)": "De → En", ... }   # alle Spalten roh
 ```
 
-## Dashboard-Kachel pro Kind
+## Dashboard-Karte pro Kind
 
-Die Kachel filtert selbst nach Klasse. Für das zweite Kind die Karte kopieren und nur die erste Zeile ändern; beide lesen denselben Sensor, es gibt keinen zweiten Abruf. Die Vorlage liegt auch in [`examples/kachel.yaml`](examples/kachel.yaml).
+Die Integration bringt eine eigene Lovelace-Karte mit und registriert sie automatisch; es ist kein Ressourcen-Eintrag und kein zweites HACS-Repository nötig. Im Dashboard **Karte hinzufügen → „DSB Vertretungsplan“** wählen; der visuelle Editor fragt Sensor, Klasse, Titel und ein paar Anzeigeoptionen ab. Für das zweite Kind die Karte ein zweites Mal mit anderer Klasse anlegen; beide lesen denselben Sensor.
+
+![Karte](examples/card.png)
 
 ```yaml
-type: markdown
-content: >-
-  {% set klasse = '08b' %}
-  {% set sensor = 'sensor.dsbmobile_123456_vertretungsplan' %}
-  {% set icons = {'Entfall': '🔴', 'Vertretung': '🔵', 'Verlegung': '🟡',
-                  'Raum-Vtr.': '🟠', 'Betreuung': '🟢', 'Statt-Vertretung': '🟣'} %}
-  ## 🎒 Klasse {{ klasse }}
-  {% if is_state(sensor, 'unavailable') %}
-  ⚠️ DSBmobile ist gerade nicht erreichbar.
-  {% else %}
-  {% set days = state_attr(sensor, 'days') or [] %}
-  {% if days | count == 0 %}
-  _Kein Plan veröffentlicht._
-  {% endif %}
-  {% for day in days %}
-  {% set eintraege = day.entries | selectattr('class_list', 'contains', klasse | lower) | list %}
-  **{{ day.day_label }}**
-  {% if eintraege | count == 0 %}
-  ✅ Keine Vertretungen
-  {% endif %}
-  {% for e in eintraege %}
-  {{ icons.get(e.type, '⚫') }} **{{ e.lesson }}. Std** {{ e.subject }}
-  {%- if e.changes.subject %} (statt {{ e.changes.subject }}){% endif %}
-  {%- if e.room %} · {{ e.room }}{% endif %}
-  {%- if e.substitute %} · {{ e.substitute }}{% endif %}
-  {%- if e.text %} · _{{ e.text }}_{% endif %}
-  {% endfor %}
-  {% for hinweis in day.info %}
-  ℹ️ {{ hinweis }}
-  {% endfor %}
-
-  {% endfor %}
-  {% endif %}
+type: custom:dsb-vertretungsplan-card
+entity: sensor.dsbmobile_123456_vertretungsplan
+class: "08b"
 ```
 
-Die Klasse in `klasse` wird klein geschrieben und zweistellig verglichen (`08b`); `8b` als Eingabe funktioniert über `'0' ~ klasse` oder einfach die Schreibweise `08b`.
+| Option            | Standard | Bedeutung                                                          |
+|-------------------|----------|--------------------------------------------------------------------|
+| `entity`          |          | der Sensor „Vertretungsplan“ (Pflicht)                             |
+| `class`           | leer     | Klasse, z. B. `08b` oder `8b`; Sammelklassen wie `08abc` passen. Leer = ganze Schule |
+| `title`           | Klasse … | eigener Titel                                                      |
+| `icon`            | `mdi:school-outline` | Icon im Kopf                                           |
+| `days`            | 0        | Anzahl Tage; 0 = Fenster der Integration                           |
+| `show_empty_days` | `true`   | Tage ohne Einträge als „Keine Vertretungen“ zeigen                 |
+| `show_info`       | `true`   | Tageshinweise („Nachrichten zum Tag“) zeigen                       |
+| `show_footer`     | `true`   | Planstand unten zeigen                                             |
+| `compact`         | `false`  | nur Stunde, Art und Fach                                           |
+
+Nach einem Update der Integration lädt der Browser die Karte über den Versions-Parameter automatisch neu; sollte sie dennoch alt aussehen, einmal die Seite hart neu laden.
+
+Wer lieber eine Markdown-Karte baut: Das Attribut `days` des Sensors enthält alles Nötige, eine Vorlage liegt in [`examples/kachel.yaml`](examples/kachel.yaml).
 
 ## Aktion `dsb_vertretungsplan.get_entries`
 

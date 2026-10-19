@@ -29,5 +29,8 @@ SERVICE_GET_ENTRIES = "get_entries"
 ATTR_CLASS = "class_name"
 ATTR_CONFIG_ENTRY = "config_entry"
 
+CARD_FILENAME = "dsb-vertretungsplan-card.js"
+CARD_URL = f"/{DOMAIN}/{CARD_FILENAME}"
+
 MANUFACTURER = "heinekingmedia GmbH"
 MODEL_ACCOUNT = "DSBmobile Zugang"

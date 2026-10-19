@@ -226,3 +226,23 @@ async def test_dashboard_card_template(hass: HomeAssistant, mock_client: AsyncMo
     assert "**1. Std** De" in rendered
     assert "**3. Std** Ma" not in rendered
     assert "Keine Vertretungen" in rendered  # tomorrow has nothing for 05a
+
+
+async def test_card_is_served_and_registered(
+    hass: HomeAssistant, mock_client: AsyncMock, hass_client
+) -> None:
+    """The bundled Lovelace card is served by HA and loaded as extra module."""
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+
+    from custom_components.dsb_vertretungsplan.const import CARD_URL
+
+    await _setup(hass, _entry())
+    urls = {u.split("?")[0] for u in hass.data[DATA_EXTRA_MODULE_URL].urls}
+    assert CARD_URL in urls
+
+    client = await hass_client()
+    response = await client.get(CARD_URL)
+    assert response.status == 200
+    body = await response.text()
+    assert 'customElements.define(CARD_TAG, DsbVertretungsplanCard)' in body
+    assert hass.states.get(PLAN).attributes["plan_updated"] is not None
