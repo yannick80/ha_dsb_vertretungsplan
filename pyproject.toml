@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "UP", "B"]
+ignore = ["E501"]
+
+# api.py and parser.py must also run on Python 3.9 (scripts/dsb_check.py).
+[tool.ruff.lint.per-file-ignores]
+"custom_components/dsb_vertretungsplan/api.py" = ["UP041", "B905"]

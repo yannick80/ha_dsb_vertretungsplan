@@ -1,0 +1,103 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "DSBmobile Zugang",
+        "description": "Zugangsdaten wie in der DSBmobile-App. Der Plan wird einmal pro Zugang geladen; die Klasse wird im Dashboard oder in der Aktion `get_entries` gefiltert.",
+        "data": {
+          "username": "Benutzer-ID",
+          "password": "Passwort"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Neu anmelden",
+        "description": "Die Zugangsdaten für {username} werden nicht mehr akzeptiert. Bitte das Passwort neu eingeben.",
+        "data": {
+          "password": "Passwort"
+        }
+      },
+      "reconfigure": {
+        "title": "Zugangsdaten ändern",
+        "data": {
+          "username": "Benutzer-ID",
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Benutzer-ID oder Passwort sind falsch.",
+      "cannot_connect": "DSBmobile ist nicht erreichbar.",
+      "unknown": "Unerwarteter Fehler, siehe Protokoll."
+    },
+    "abort": {
+      "already_configured": "Dieser Zugang ist bereits eingerichtet.",
+      "reauth_successful": "Neuanmeldung erfolgreich.",
+      "reconfigure_successful": "Zugangsdaten aktualisiert.",
+      "unique_id_mismatch": "Die Benutzer-ID eines bestehenden Zugangs kann nicht geändert werden. Bitte einen neuen Zugang anlegen."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DSB Vertretungsplan",
+        "description": "Der Sensor „Vertretungsplan“ enthält die Einträge von heute bis in N Tagen.",
+        "data": {
+          "days_ahead": "Vorschau in Tagen",
+          "scan_interval_minutes": "Abfrageintervall"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "plan": {
+        "name": "Vertretungsplan"
+      },
+      "plan_updated": {
+        "name": "Planstand"
+      },
+      "plans": {
+        "name": "Pläne"
+      },
+      "news": {
+        "name": "Nachrichten"
+      },
+      "documents": {
+        "name": "Dokumente"
+      },
+      "last_update": {
+        "name": "Letzte Abfrage"
+      }
+    },
+    "calendar": {
+      "calendar": {
+        "name": "Vertretungsplan"
+      }
+    }
+  },
+  "services": {
+    "get_entries": {
+      "name": "Einträge abrufen",
+      "description": "Liefert die Vertretungseinträge der kommenden Tage, optional für eine Klasse.",
+      "fields": {
+        "class_name": {
+          "name": "Klasse",
+          "description": "z. B. 08b. Leer = alle Klassen. Sammelklassen wie 08abc werden berücksichtigt."
+        },
+        "days_ahead": {
+          "name": "Tage",
+          "description": "Anzahl Tage ab heute. Standard: Option der Integration."
+        },
+        "config_entry": {
+          "name": "Zugang",
+          "description": "Nur nötig, wenn mehrere DSB-Zugänge eingerichtet sind."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_config_entry": {
+      "message": "Kein geladener DSB-Zugang gefunden."
+    }
+  }
+}

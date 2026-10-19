@@ -1,0 +1,21 @@
+get_entries:
+  fields:
+    class_name:
+      required: false
+      example: "08b"
+      selector:
+        text:
+    days_ahead:
+      required: false
+      example: 3
+      selector:
+        number:
+          min: 1
+          max: 14
+          mode: box
+          unit_of_measurement: Tage
+    config_entry:
+      required: false
+      selector:
+        config_entry:
+          integration: dsb_vertretungsplan

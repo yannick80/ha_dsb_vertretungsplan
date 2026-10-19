@@ -1,0 +1,35 @@
+# Markdown-Kachel: Vertretungsplan für eine Klasse.
+# Für das zweite Kind kopieren und 'klasse' ändern.
+type: markdown
+content: >-
+  {% set klasse = '08b' %}
+  {% set sensor = 'sensor.dsbmobile_123456_vertretungsplan' %}
+  {% set icons = {'Entfall': '🔴', 'Vertretung': '🔵', 'Verlegung': '🟡',
+                  'Raum-Vtr.': '🟠', 'Betreuung': '🟢', 'Statt-Vertretung': '🟣'} %}
+  ## 🎒 Klasse {{ klasse }}
+  {% if is_state(sensor, 'unavailable') %}
+  ⚠️ DSBmobile ist gerade nicht erreichbar.
+  {% else %}
+  {% set days = state_attr(sensor, 'days') or [] %}
+  {% if days | count == 0 %}
+  _Kein Plan veröffentlicht._
+  {% endif %}
+  {% for day in days %}
+  {% set eintraege = day.entries | selectattr('class_list', 'contains', klasse | lower) | list %}
+  **{{ day.day_label }}**
+  {% if eintraege | count == 0 %}
+  ✅ Keine Vertretungen
+  {% endif %}
+  {% for e in eintraege %}
+  {{ icons.get(e.type, '⚫') }} **{{ e.lesson }}. Std** {{ e.subject }}
+  {%- if e.changes.subject %} (statt {{ e.changes.subject }}){% endif %}
+  {%- if e.room %} · {{ e.room }}{% endif %}
+  {%- if e.substitute %} · {{ e.substitute }}{% endif %}
+  {%- if e.text %} · _{{ e.text }}_{% endif %}
+  {% endfor %}
+  {% for hinweis in day.info %}
+  ℹ️ {{ hinweis }}
+  {% endfor %}
+
+  {% endfor %}
+  {% endif %}

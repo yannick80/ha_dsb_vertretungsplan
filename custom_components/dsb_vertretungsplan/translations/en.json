@@ -1,0 +1,103 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "DSBmobile account",
+        "description": "Credentials as used in the DSBmobile app. The plan is loaded once per account; filter by class on the dashboard or with the `get_entries` action.",
+        "data": {
+          "username": "User ID",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate",
+        "description": "The credentials for {username} are no longer accepted. Please enter the password again.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Change credentials",
+        "data": {
+          "username": "User ID",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "User ID or password is wrong.",
+      "cannot_connect": "DSBmobile cannot be reached.",
+      "unknown": "Unexpected error, see the log."
+    },
+    "abort": {
+      "already_configured": "This account is already configured.",
+      "reauth_successful": "Re-authentication successful.",
+      "reconfigure_successful": "Credentials updated.",
+      "unique_id_mismatch": "The user ID of an existing account cannot be changed. Please add a new account instead."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DSB substitution plan",
+        "description": "The sensor \"Substitution plan\" holds the entries from today up to N days ahead.",
+        "data": {
+          "days_ahead": "Preview in days",
+          "scan_interval_minutes": "Polling interval"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "plan": {
+        "name": "Substitution plan"
+      },
+      "plan_updated": {
+        "name": "Plan updated"
+      },
+      "plans": {
+        "name": "Plans"
+      },
+      "news": {
+        "name": "News"
+      },
+      "documents": {
+        "name": "Documents"
+      },
+      "last_update": {
+        "name": "Last poll"
+      }
+    },
+    "calendar": {
+      "calendar": {
+        "name": "Substitution plan"
+      }
+    }
+  },
+  "services": {
+    "get_entries": {
+      "name": "Get entries",
+      "description": "Returns the substitution entries of the coming days, optionally for one class.",
+      "fields": {
+        "class_name": {
+          "name": "Class",
+          "description": "e.g. 08b. Empty = all classes. Merged classes such as 08abc are matched."
+        },
+        "days_ahead": {
+          "name": "Days",
+          "description": "Number of days from today. Default: the integration option."
+        },
+        "config_entry": {
+          "name": "Account",
+          "description": "Only needed with several DSB accounts."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_config_entry": {
+      "message": "No loaded DSB account found."
+    }
+  }
+}
