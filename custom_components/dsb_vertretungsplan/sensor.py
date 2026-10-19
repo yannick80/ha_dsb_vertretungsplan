@@ -20,7 +20,6 @@ from .const import (
     ATTR_DAYS,
     ATTR_DAYS_AHEAD,
     ATTR_DOCUMENTS,
-    ATTR_ENTRIES,
     ATTR_NEWS,
     ATTR_PLAN_DAYS,
     ATTR_PLANS,
@@ -40,12 +39,13 @@ class DSBSensorDescription(SensorEntityDescription):
 
 
 def _plan_attributes(coordinator: DSBCoordinator) -> dict[str, Any]:
-    """Attributes of the main sensor: the whole school, next N days.
+    """Attributes of the main sensor: a small summary only.
 
-    `entries` is a flat list for simple templates, `days` the same data
-    grouped by day including plan days without entries. Each entry carries
-    `class_list` (e.g. "08abc" -> ["08a", "08b", "08c"]) so a card can
-    filter with `'08b' in e.class_list`.
+    The full entry list of a whole school easily exceeds the 16 kB that
+    Home Assistant allows for state attributes, so entries are not exposed
+    here. The bundled card fetches them through the websocket command
+    `dsb_vertretungsplan/entries`, automations through the action
+    `dsb_vertretungsplan.get_entries`.
     """
     first, last = coordinator.window()
     return {
@@ -56,8 +56,8 @@ def _plan_attributes(coordinator: DSBCoordinator) -> dict[str, Any]:
         "from": first.isoformat(),
         "to": last.isoformat(),
         ATTR_PLAN_DAYS: [d.isoformat() for d in coordinator.plan_days()],
-        ATTR_ENTRIES: [e.as_dict() for e in coordinator.entries()],
-        ATTR_DAYS: coordinator.grouped(),
+        ATTR_DAYS: coordinator.summary(),
+        "classes": coordinator.classes_in_window(),
     }
 
 

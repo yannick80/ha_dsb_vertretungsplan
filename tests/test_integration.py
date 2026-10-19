@@ -88,12 +88,12 @@ async def test_plan_sensor(hass: HomeAssistant, mock_client: AsyncMock) -> None:
     assert state.state == "3"  # all entries of the next 3 days, whole school
     attrs = state.attributes
     assert attrs["days_ahead"] == 3
-    assert [e["type"] for e in attrs["entries"]] == ["Entfall", "Vertretung", "Raum-Vtr."]
-    assert attrs["entries"][2]["class_list"] == ["08a", "08b", "08c"]
-    assert attrs["entries"][2]["changes"] == {"room": "Ph2"}
+    assert "entries" not in attrs  # kept small, see websocket command
+    assert attrs["classes"] == ["05a", "08a", "08b", "08c"]
     assert len(attrs["days"]) == 2
     assert attrs["days"][0]["count"] == 2
     assert attrs["days"][0]["info"] == ["Kein Mensabetrieb"]
+    assert "entries" not in attrs["days"][0]
     assert attrs["days"][1]["count"] == 1
 
     calendar = hass.states.get("calendar.dsbmobile_123456_substitution_plan")
@@ -119,6 +119,8 @@ async def test_get_entries_action(hass: HomeAssistant, mock_client: AsyncMock) -
         DOMAIN, SERVICE_GET_ENTRIES, {"class_name": "8b"}, blocking=True, return_response=True
     )
     assert result["count"] == 2  # "08b" today and "08abc" tomorrow
+    assert result["entries"][1]["class_list"] == ["08a", "08b", "08c"]
+    assert result["entries"][1]["changes"] == {"room": "Ph2"}
     assert [e["classes"] for e in result["entries"]] == ["08b", "08abc"]
     assert [d["count"] for d in result["days"]] == [1, 1]
 
@@ -205,29 +207,6 @@ async def test_unload(hass: HomeAssistant, mock_client: AsyncMock) -> None:
     assert entry.state is ConfigEntryState.NOT_LOADED
 
 
-async def test_dashboard_card_template(hass: HomeAssistant, mock_client: AsyncMock) -> None:
-    """The example card from the README renders and filters by class."""
-    from pathlib import Path
-
-    from homeassistant.helpers.template import Template
-
-    await _setup(hass, _entry())
-    source = (Path(__file__).parent / "kachel_template.jinja").read_text()
-    source = source.replace("sensor.dsbmobile_123456_vertretungsplan", PLAN)
-
-    rendered = Template(source, hass).async_render()
-    assert "Klasse 08b" in rendered
-    assert "**3. Std** Ma" in rendered  # Entfall 08b today
-    assert "**6. Std** Ph" in rendered  # Raum-Vtr. 08abc tomorrow
-    assert "**1. Std** De" not in rendered  # 05a is filtered out
-    assert "Kein Mensabetrieb" in rendered
-
-    rendered = Template(source.replace("'08b'", "'05a'"), hass).async_render()
-    assert "**1. Std** De" in rendered
-    assert "**3. Std** Ma" not in rendered
-    assert "Keine Vertretungen" in rendered  # tomorrow has nothing for 05a
-
-
 async def test_card_is_served_and_registered(
     hass: HomeAssistant, mock_client: AsyncMock, hass_client
 ) -> None:
@@ -244,5 +223,65 @@ async def test_card_is_served_and_registered(
     response = await client.get(CARD_URL)
     assert response.status == 200
     body = await response.text()
-    assert 'customElements.define(CARD_TAG, DsbVertretungsplanCard)' in body
+    assert "customElements.define(CARD_TAG, DsbVertretungsplanCard)" in body
     assert hass.states.get(PLAN).attributes["plan_updated"] is not None
+
+
+async def test_websocket_entries(
+    hass: HomeAssistant, mock_client: AsyncMock, hass_ws_client
+) -> None:
+    """The card's websocket command returns filtered entries."""
+    await _setup(hass, _entry())
+    ws = await hass_ws_client(hass)
+
+    await ws.send_json(
+        {"id": 1, "type": "dsb_vertretungsplan/entries", "entity_id": PLAN, "class_name": "8b"}
+    )
+    msg = await ws.receive_json()
+    assert msg["success"]
+    assert msg["result"]["count"] == 2
+    assert [d["count"] for d in msg["result"]["days"]] == [1, 1]
+    assert msg["result"]["classes"] == ["05a", "08a", "08b", "08c"]
+    assert msg["result"]["plan_updated"] is not None
+
+    await ws.send_json({"id": 2, "type": "dsb_vertretungsplan/entries", "entity_id": "sensor.nope"})
+    msg = await ws.receive_json()
+    assert not msg["success"]
+    assert msg["error"]["code"] == "not_found"
+
+
+async def test_attributes_stay_small_for_big_school(
+    hass: HomeAssistant, mock_client: AsyncMock
+) -> None:
+    """Even hundreds of entries must not push attributes over HA's 16 kB limit."""
+    import json
+    from datetime import date
+
+    from custom_components.dsb_vertretungsplan.parser import SubstitutionEntry
+
+    data = mock_client.async_get_data.return_value
+    today = date.today()
+    data.entries = [
+        SubstitutionEntry(
+            day=today,
+            day_label="heute",
+            type="Vertretung",
+            classes=f"{g:02d}{c}",
+            lesson=str(i % 10),
+            subject="Mathematik",
+            room="A123",
+            substitute="Mustermann",
+            teacher="Musterfrau",
+            text="Aufgaben stehen in Moodle bereit",
+            changes={"room": "B456", "subject": "Deutsch"},
+            columns={"Art": "Vertretung", "Klasse(n)": f"{g:02d}{c}"},
+            raw_text="Vertretung ...",
+        )
+        for i, (g, c) in enumerate(
+            (g, c) for g in range(5, 13) for c in "abcdef" for _ in range(10)
+        )
+    ]
+    await _setup(hass, _entry())
+    state = hass.states.get(PLAN)
+    assert state.state == "480"
+    assert len(json.dumps(dict(state.attributes))) < 4000

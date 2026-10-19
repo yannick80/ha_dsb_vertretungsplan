@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import voluptuous as vol
 
+from homeassistant.components import websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntryState
@@ -26,7 +28,7 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
@@ -85,18 +87,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def _get_entries(call: ServiceCall) -> ServiceResponse:
         coordinator = _coordinator_for(call)
-        class_filter: str = call.data[ATTR_CLASS]
-        days: int | None = call.data.get(ATTR_DAYS_AHEAD)
-        entries = coordinator.entries(class_filter, days)
-        first, last = coordinator.window(days)
-        return {
-            "class_name": class_filter,
-            "from": first.isoformat(),
-            "to": last.isoformat(),
-            "count": len(entries),
-            ATTR_ENTRIES: [e.as_dict() for e in entries],
-            ATTR_DAYS: coordinator.grouped(class_filter, days),
-        }
+        return _entries_response(coordinator, call.data[ATTR_CLASS], call.data.get(ATTR_DAYS_AHEAD))
 
     hass.services.async_register(
         DOMAIN,
@@ -105,7 +96,58 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         schema=GET_ENTRIES_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+    websocket_api.async_register_command(hass, ws_get_entries)
     return True
+
+
+def _entries_response(
+    coordinator: DSBCoordinator, class_filter: str, days: int | None
+) -> dict[str, Any]:
+    """Build the payload shared by the action and the websocket command."""
+    entries = coordinator.entries(class_filter, days)
+    first, last = coordinator.window(days)
+    return {
+        "class_name": class_filter,
+        "from": first.isoformat(),
+        "to": last.isoformat(),
+        "count": len(entries),
+        "classes": coordinator.classes_in_window(days),
+        "plan_updated": (
+            coordinator.plan_updated_at.isoformat() if coordinator.plan_updated_at else None
+        ),
+        ATTR_ENTRIES: [e.as_dict() for e in entries],
+        ATTR_DAYS: coordinator.grouped(class_filter, days),
+    }
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/entries",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Optional(ATTR_CLASS, default=""): cv.string,
+        vol.Optional(ATTR_DAYS_AHEAD): vol.All(
+            vol.Coerce(int), vol.Range(min=MIN_DAYS_AHEAD, max=MAX_DAYS_AHEAD)
+        ),
+    }
+)
+@callback
+def ws_get_entries(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Return the entries behind a plan sensor; used by the bundled card."""
+    registry_entry = er.async_get(hass).async_get(msg["entity_id"])
+    entry = (
+        hass.config_entries.async_get_entry(registry_entry.config_entry_id)
+        if registry_entry and registry_entry.config_entry_id
+        else None
+    )
+    if entry is None or entry.domain != DOMAIN or entry.state is not ConfigEntryState.LOADED:
+        connection.send_error(msg["id"], "not_found", "Entity is not a loaded DSB plan sensor")
+        return
+    connection.send_result(
+        msg["id"],
+        _entries_response(entry.runtime_data, msg[ATTR_CLASS], msg.get(ATTR_DAYS_AHEAD)),
+    )
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:

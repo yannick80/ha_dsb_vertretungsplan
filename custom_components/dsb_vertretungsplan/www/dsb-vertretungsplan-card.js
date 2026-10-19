@@ -12,7 +12,7 @@
 
 const CARD_TAG = "dsb-vertretungsplan-card";
 const EDITOR_TAG = "dsb-vertretungsplan-card-editor";
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.0.1";
 
 const CLASS_RE = /^(\d{1,2})([a-zäöü]*)$/;
 const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
@@ -35,17 +35,6 @@ function normalizeClass(value) {
   const m = CLASS_RE.exec(v);
   if (!m) return v;
   return `${m[1].padStart(2, "0")}${m[2]}`;
-}
-
-function entryMatches(entry, needle) {
-  if (!needle) return true;
-  const list = Array.isArray(entry.class_list) ? entry.class_list : [];
-  if (list.includes(needle)) return true;
-  if (/^\d+$/.test(needle)) return list.some((c) => c.startsWith(needle));
-  const classes = String(entry.classes || "").toLowerCase();
-  if (classes.includes(needle)) return true;
-  if (!classes) return String(entry.text || "").toLowerCase().includes(needle);
-  return false;
 }
 
 function typeStyle(type) {
@@ -194,6 +183,13 @@ class DsbVertretungsplanCard extends HTMLElement {
     return { entity: entity || "", class: "", show_empty_days: true, show_info: true };
   }
 
+  constructor() {
+    super();
+    this._requestId = 0;
+    this._data = null;
+    this._error = null;
+  }
+
   setConfig(config) {
     if (!config || !config.entity) {
       throw new Error("Bitte den Sensor „Vertretungsplan“ als entity angeben.");
@@ -209,7 +205,9 @@ class DsbVertretungsplanCard extends HTMLElement {
       ...config,
     };
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    this._data = null;
     this._render();
+    this._fetch();
   }
 
   set hass(hass) {
@@ -218,7 +216,31 @@ class DsbVertretungsplanCard extends HTMLElement {
     if (state !== this._state) {
       this._state = state;
       this._render();
+      this._fetch();
     }
+  }
+
+  async _fetch() {
+    const cfg = this._config;
+    const state = this._state;
+    if (!this._hass || !state || state.state === "unavailable" || state.state === "unknown") {
+      this._data = null;
+      return;
+    }
+    const request = ++this._requestId;
+    try {
+      const msg = { type: "dsb_vertretungsplan/entries", entity_id: cfg.entity, class_name: cfg.class || "" };
+      if (cfg.days > 0) msg.days_ahead = cfg.days;
+      const data = await this._hass.callWS(msg);
+      if (request !== this._requestId) return;
+      this._data = data;
+      this._error = null;
+    } catch (err) {
+      if (request !== this._requestId) return;
+      this._data = null;
+      this._error = err?.message || String(err);
+    }
+    this._render();
   }
 
   getCardSize() {
@@ -231,15 +253,8 @@ class DsbVertretungsplanCard extends HTMLElement {
   }
 
   _days() {
-    const state = this._state;
-    if (!state || !this._config) return [];
-    const needle = normalizeClass(this._config.class);
-    let days = Array.isArray(state.attributes.days) ? state.attributes.days : [];
-    if (this._config.days > 0) days = days.slice(0, this._config.days);
-    return days.map((day) => ({
-      ...day,
-      entries: (day.entries || []).filter((e) => entryMatches(e, needle)),
-    }));
+    if (!this._data || !this._config) return [];
+    return Array.isArray(this._data.days) ? this._data.days : [];
   }
 
   _render() {
@@ -261,9 +276,16 @@ class DsbVertretungsplanCard extends HTMLElement {
       body = `<div class="warning"><ha-icon icon="mdi:cloud-off-outline"></ha-icon>
         <div>DSBmobile ist gerade nicht erreichbar.</div></div>`;
       badge = `<div class="badge muted">–</div>`;
+    } else if (this._error) {
+      body = `<div class="warning"><ha-icon icon="mdi:alert-circle-outline"></ha-icon>
+        <div>Daten konnten nicht geladen werden: ${escapeHtml(this._error)}</div></div>`;
+      badge = `<div class="badge muted">!</div>`;
+    } else if (!this._data) {
+      body = `<div class="day"><div class="empty"><ha-icon icon="mdi:timer-sand"></ha-icon>Lade …</div></div>`;
+      badge = `<div class="badge muted">…</div>`;
     } else {
       const days = this._days();
-      const total = days.reduce((n, d) => n + d.entries.length, 0);
+      const total = this._data.count || 0;
       badge = `<div class="badge ${total > 0 ? "alert" : ""}">${total}</div>`;
       subtitle = total === 0 ? "Keine Vertretungen" : total === 1 ? "1 Vertretung" : `${total} Vertretungen`;
       if (days.length === 0) {
@@ -275,8 +297,13 @@ class DsbVertretungsplanCard extends HTMLElement {
           .map((d) => this._renderDay(d))
           .join("");
       }
+      const known = Array.isArray(this._data.classes) ? this._data.classes : [];
+      if (total === 0 && klasse && known.length > 0 && !known.includes(normalizeClass(klasse))) {
+        body += `<div class="info" style="margin:0 16px 12px 16px"><ha-icon icon="mdi:help-circle-outline"></ha-icon>
+          <div>Für „${escapeHtml(klasse)}“ gibt es keine Einträge. Klassen im Plan: ${escapeHtml(known.join(", "))}</div></div>`;
+      }
       if (cfg.show_footer) {
-        const raw = state.attributes.plan_updated;
+        const raw = this._data.plan_updated;
         const stamp = raw && !Number.isNaN(Date.parse(raw))
           ? new Date(raw).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })
           : "";

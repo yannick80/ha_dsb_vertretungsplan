@@ -105,6 +105,20 @@ class DSBCoordinator(DataUpdateCoordinator[DSBData]):
         first, last = self.window(days)
         return [d for d in self.data.plan_days if first <= d <= last]
 
+    def summary(self, days: int | None = None) -> list[dict[str, Any]]:
+        """Return one small dict per plan day in the window (no entries)."""
+        return [
+            {k: v for k, v in group.items() if k != ATTR_ENTRIES}
+            for group in self.grouped("", days)
+        ]
+
+    def classes_in_window(self, days: int | None = None) -> list[str]:
+        """Return every class that has an entry inside the window, sorted."""
+        found: set[str] = set()
+        for entry in self.entries("", days):
+            found.update(entry.class_list)
+        return sorted(found)
+
     def grouped(self, class_filter: str = "", days: int | None = None) -> list[dict[str, Any]]:
         """Return the window grouped by day, including plan days without entries.
 

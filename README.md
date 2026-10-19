@@ -33,7 +33,7 @@ Alle Entitäten hängen am Gerät „DSBmobile *Benutzer-ID*“.
 
 | Entität                                   | Zustand                                  | Attribute                                                     |
 |-------------------------------------------|------------------------------------------|---------------------------------------------------------------|
-| `sensor.dsbmobile_<id>_vertretungsplan`   | Anzahl Einträge (alle Klassen, N Tage)   | `entries` (flach), `days` (nach Tag gruppiert), `plan_days`, `from`, `to`, `days_ahead` |
+| `sensor.dsbmobile_<id>_vertretungsplan`   | Anzahl Einträge (alle Klassen, N Tage)   | `days` (je Tag: `date`, `day_label`, `count`, `info`), `classes` (alle Klassen mit Einträgen), `plan_days`, `plan_updated`, `from`, `to`, `days_ahead` |
 | `calendar.dsbmobile_<id>_vertretungsplan` | nächster Eintrag als Ganztagstermin      | für Kalender-Karte und Kalender-Trigger                       |
 | `sensor.dsbmobile_<id>_planstand`         | Zeitpunkt der letzten Plan-Veröffentlichung |                                                            |
 | `sensor.dsbmobile_<id>_nachrichten`       | Anzahl News                              | `news`                                                        |
@@ -41,14 +41,14 @@ Alle Entitäten hängen am Gerät „DSBmobile *Benutzer-ID*“.
 | `sensor.dsbmobile_<id>_plane`             | Anzahl Pläne (Diagnose)                  | `plans`, `plan_days`, `errors`                                |
 | `sensor.dsbmobile_<id>_letzte_abfrage`    | letzte erfolgreiche Abfrage (Diagnose)   |                                                               |
 
-`days` enthält **jeden Plantag im Fenster**, auch solche ohne Einträge (`count: 0`). So kann eine Kachel „Keine Vertretungen“ für einen Tag ausdrücklich anzeigen, statt ihn zu verschweigen. Jeder Eintrag sieht so aus:
+`days` enthält **jeden Plantag im Fenster**, auch solche ohne Einträge (`count: 0`). Die Einträge selbst liegen bewusst nicht in den Attributen: Der Plan einer ganzen Schule überschreitet schnell die 16 KB, die Home Assistant für Attribute erlaubt. Die Karte holt die Einträge über den WebSocket-Befehl `dsb_vertretungsplan/entries`, Automationen über die Aktion `dsb_vertretungsplan.get_entries` (siehe unten). Ein Eintrag sieht dort so aus:
 
 ```yaml
 date: "2026-10-19"
 day_label: "19.10.2026 Montag"
 type: "Vertretung"              # Art
 classes: "08abc"                # Spalte Klasse(n), wie von Untis geliefert
-class_list: ["08a", "08b", "08c"]   # aufgelöst und normalisiert, für Filter
+class_list: ["08a", "08b", "08c"]   # aufgelöst und normalisiert
 lesson: "5"
 subject: "En"
 room: "B202"
@@ -83,9 +83,7 @@ class: "08b"
 | `show_footer`     | `true`   | Planstand unten zeigen                                             |
 | `compact`         | `false`  | nur Stunde, Art und Fach                                           |
 
-Nach einem Update der Integration lädt der Browser die Karte über den Versions-Parameter automatisch neu; sollte sie dennoch alt aussehen, einmal die Seite hart neu laden.
-
-Wer lieber eine Markdown-Karte baut: Das Attribut `days` des Sensors enthält alles Nötige, eine Vorlage liegt in [`examples/kachel.yaml`](examples/kachel.yaml).
+Nach einem Update der Integration lädt der Browser die Karte über den Versions-Parameter automatisch neu; sollte sie dennoch alt aussehen, einmal die Seite hart neu laden. Findet die Karte für die eingestellte Klasse nichts, obwohl der Plan Einträge hat, zeigt sie die im Plan vorkommenden Klassen an, so lässt sich die Schreibweise der Schule schnell abgleichen.
 
 ## Aktion `dsb_vertretungsplan.get_entries`
 
@@ -114,7 +112,7 @@ actions:
             {% endfor %}
 ```
 
-Rückgabe: `class_name`, `from`, `to`, `count`, `entries` (flach) und `days` (gruppiert, wie beim Sensor). Mit `days_ahead` lässt sich das Fenster pro Aufruf überschreiben; `config_entry` ist nur bei mehreren DSB-Zugängen nötig.
+Rückgabe: `class_name`, `from`, `to`, `count`, `classes`, `plan_updated`, `entries` (flach) und `days` (nach Tag gruppiert, jeweils mit `entries`). Mit `days_ahead` lässt sich das Fenster pro Aufruf überschreiben; `config_entry` ist nur bei mehreren DSB-Zugängen nötig.
 
 ## Fehlersuche
 
