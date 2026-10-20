@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0
+
+- Karte: neue Option `hide_today_after` (Uhrzeit). Ab dieser Uhrzeit wird der heutige Tag ausgeblendet, z. B. nach Schulbeginn; die Karte aktualisiert sich dafür minütlich ohne Neuladen.
+
 ## 1.1.1
 
 - Karte wird auch im Legacy-Frontend geladen (ältere Android-WebViews, z. B. Shelly Wall Display); vorher erschien dort die rote Fehlerkarte „Custom element doesn't exist“.

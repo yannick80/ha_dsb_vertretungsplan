@@ -78,6 +78,7 @@ class: "08b"
 | `title`           | Klasse … | eigener Titel                                                      |
 | `icon`            | `mdi:school-outline` | Icon im Kopf                                           |
 | `days`            | 0        | Anzahl Tage; 0 = Fenster der Integration                           |
+| `hide_today_after`| leer     | Uhrzeit (`HH:MM`), ab der der heutige Tag ausgeblendet wird, z. B. `08:00` nach Schulbeginn. Zähler und Badge zählen dann nur die folgenden Tage |
 | `show_empty_days` | `true`   | Tage ohne Einträge als „Keine Vertretungen“ zeigen                 |
 | `show_info`       | `true`   | Tageshinweise („Nachrichten zum Tag“) zeigen                       |
 | `show_footer`     | `true`   | Planstand unten zeigen                                             |

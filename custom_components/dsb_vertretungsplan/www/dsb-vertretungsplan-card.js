@@ -12,7 +12,7 @@
 
 const CARD_TAG = "dsb-vertretungsplan-card";
 const EDITOR_TAG = "dsb-vertretungsplan-card-editor";
-const CARD_VERSION = "1.1.1";
+const CARD_VERSION = "1.2.0";
 
 const CLASS_RE = /^(\d{1,2})([a-zäöü]*)$/;
 const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
@@ -90,6 +90,15 @@ function escapeHtml(value) {
 function localToday() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** True once the local clock has passed "HH:MM" (empty string = never). */
+function pastTime(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || "").trim());
+  if (!m) return false;
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  return minutes >= parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
 
 function relativeLabel(isoDate) {
@@ -223,6 +232,29 @@ class DsbVertretungsplanCard extends HTMLElement {
     this._requestId = 0;
     this._data = null;
     this._error = null;
+    this._timer = null;
+    this._todayHidden = false;
+  }
+
+  connectedCallback() {
+    // Re-render once a minute so that hide_today_after (and the "Heute"
+    // labels after midnight) take effect without a page reload.
+    if (!this._timer) {
+      this._timer = setInterval(() => {
+        if (this._config && this._todayHidden !== this._hideToday()) this._render();
+      }, 60 * 1000);
+    }
+  }
+
+  disconnectedCallback() {
+    if (this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
+    }
+  }
+
+  _hideToday() {
+    return pastTime(this._config && this._config.hide_today_after);
   }
 
   setConfig(config) {
@@ -290,7 +322,10 @@ class DsbVertretungsplanCard extends HTMLElement {
 
   _days() {
     if (!this._data || !this._config) return [];
-    return Array.isArray(this._data.days) ? this._data.days : [];
+    const days = Array.isArray(this._data.days) ? this._data.days : [];
+    if (!this._hideToday()) return days;
+    const today = localToday();
+    return days.filter((d) => d.date !== today);
   }
 
   _render() {
@@ -321,12 +356,14 @@ class DsbVertretungsplanCard extends HTMLElement {
       badge = `<div class="badge muted">…</div>`;
     } else {
       const days = this._days();
-      const total = this._data.count || 0;
+      this._todayHidden = this._hideToday();
+      const total = days.reduce((n, d) => n + d.entries.length, 0);
       badge = `<div class="badge ${total > 0 ? "alert" : ""}">${total}</div>`;
       subtitle = total === 0 ? "Keine Vertretungen" : total === 1 ? "1 Vertretung" : `${total} Vertretungen`;
       if (days.length === 0) {
+        const hadToday = this._todayHidden && Array.isArray(this._data.days) && this._data.days.length > 0;
         body = `<div class="day"><div class="empty"><ha-icon icon="mdi:calendar-blank-outline"></ha-icon>
-          Kein Plan veröffentlicht.</div></div>`;
+          ${hadToday ? "Heute ausgeblendet, kein weiterer Plantag." : "Kein Plan veröffentlicht."}</div></div>`;
       } else {
         body = days
           .filter((d) => d.entries.length > 0 || cfg.show_empty_days || (cfg.show_info && d.info && d.info.length))
@@ -425,6 +462,7 @@ const EDITOR_SCHEMA = [
     name: "",
     schema: [
       { name: "days", selector: { number: { min: 0, max: 14, mode: "box" } } },
+      { name: "hide_today_after", selector: { time: {} } },
       { name: "icon", selector: { icon: {} } },
     ],
   },
@@ -446,6 +484,7 @@ const EDITOR_LABELS = {
   class: "Klasse (z. B. 08b, leer = alle)",
   title: "Titel (leer = „Klasse …“)",
   days: "Tage (0 = wie Integration)",
+  hide_today_after: "Heute ausblenden ab (Uhrzeit)",
   icon: "Icon",
   show_empty_days: "Tage ohne Einträge zeigen",
   show_info: "Tageshinweise zeigen",
