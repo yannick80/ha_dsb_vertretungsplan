@@ -211,13 +211,15 @@ async def test_card_is_served_and_registered(
     hass: HomeAssistant, mock_client: AsyncMock, hass_client
 ) -> None:
     """The bundled Lovelace card is served by HA and loaded as extra module."""
-    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+    from homeassistant.components.frontend import DATA_EXTRA_JS_URL_ES5, DATA_EXTRA_MODULE_URL
 
     from custom_components.dsb_vertretungsplan.const import CARD_URL
 
     await _setup(hass, _entry())
     urls = {u.split("?")[0] for u in hass.data[DATA_EXTRA_MODULE_URL].urls}
     assert CARD_URL in urls
+    legacy_urls = {u.split("?")[0] for u in hass.data[DATA_EXTRA_JS_URL_ES5].urls}
+    assert CARD_URL in legacy_urls  # older WebViews get the legacy frontend build
 
     client = await hass_client()
     response = await client.get(CARD_URL)

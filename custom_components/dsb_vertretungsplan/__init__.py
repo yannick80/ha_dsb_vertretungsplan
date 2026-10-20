@@ -163,7 +163,12 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         [StaticPathConfig(CARD_URL, str(card_path), cache_headers=False)]
     )
     version = (await async_get_integration(hass, DOMAIN)).version or "0"
+    # Register for both frontend builds: browsers that do not meet the
+    # requirements of the modern build (older Android WebViews on wall
+    # displays, for example) get the legacy build, which only loads
+    # resources registered with es5=True.
     add_extra_js_url(hass, f"{CARD_URL}?v={version}")
+    add_extra_js_url(hass, f"{CARD_URL}?v={version}", es5=True)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: DSBConfigEntry) -> bool:

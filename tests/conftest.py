@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from homeassistant.util import dt as dt_util
+
 from custom_components.dsb_vertretungsplan.api import DSBData, DSBItem
 from custom_components.dsb_vertretungsplan.parser import DayInfo, SubstitutionEntry
 
@@ -70,8 +72,12 @@ def make_data(today: date) -> DSBData:
 
 
 @pytest.fixture
-def mock_client() -> Generator[AsyncMock]:
-    """Patch the DSB client used by the integration and the config flow."""
+def mock_client(hass) -> Generator[AsyncMock]:
+    """Patch the DSB client used by the integration and the config flow.
+
+    Sample data is built relative to "today" in the Home Assistant time
+    zone, not the machine's, so the tests do not break around midnight.
+    """
     with (
         patch("custom_components.dsb_vertretungsplan.DSBClient", autospec=True) as init_cls,
         patch(
@@ -82,5 +88,5 @@ def mock_client() -> Generator[AsyncMock]:
         flow_cls.return_value = client
         client.async_login.return_value = "token"
         client.async_get_timetables.return_value = []
-        client.async_get_data.return_value = make_data(date.today())
+        client.async_get_data.return_value = make_data(dt_util.now().date())
         yield client

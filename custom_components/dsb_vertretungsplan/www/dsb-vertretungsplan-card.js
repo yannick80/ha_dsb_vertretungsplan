@@ -12,7 +12,7 @@
 
 const CARD_TAG = "dsb-vertretungsplan-card";
 const EDITOR_TAG = "dsb-vertretungsplan-card-editor";
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.1.1";
 
 const CLASS_RE = /^(\d{1,2})([a-zäöü]*)$/;
 const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
@@ -80,7 +80,7 @@ function typeStyle(type) {
 }
 
 function escapeHtml(value) {
-  return String(value ?? "")
+  return String(value === null || value === undefined ? "" : value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -211,8 +211,9 @@ class DsbVertretungsplanCard extends HTMLElement {
   }
 
   static getStubConfig(hass) {
-    const entity = Object.keys(hass?.states || {}).find(
-      (id) => id.startsWith("sensor.") && hass.states[id].attributes?.days_ahead !== undefined,
+    const states = (hass && hass.states) || {};
+    const entity = Object.keys(states).find(
+      (id) => id.startsWith("sensor.") && states[id].attributes && states[id].attributes.days_ahead !== undefined,
     );
     return { entity: entity || "", class: "", show_empty_days: true, show_info: true };
   }
@@ -247,7 +248,7 @@ class DsbVertretungsplanCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    const state = hass?.states?.[this._config?.entity];
+    const state = hass && hass.states && this._config ? hass.states[this._config.entity] : undefined;
     if (state !== this._state) {
       this._state = state;
       this._render();
@@ -273,7 +274,7 @@ class DsbVertretungsplanCard extends HTMLElement {
     } catch (err) {
       if (request !== this._requestId) return;
       this._data = null;
-      this._error = err?.message || String(err);
+      this._error = (err && err.message) || String(err);
     }
     this._render();
   }
@@ -328,7 +329,7 @@ class DsbVertretungsplanCard extends HTMLElement {
           Kein Plan veröffentlicht.</div></div>`;
       } else {
         body = days
-          .filter((d) => d.entries.length > 0 || cfg.show_empty_days || (cfg.show_info && d.info?.length))
+          .filter((d) => d.entries.length > 0 || cfg.show_empty_days || (cfg.show_info && d.info && d.info.length))
           .map((d) => this._renderDay(d))
           .join("");
       }

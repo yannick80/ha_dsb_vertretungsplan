@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- Karte wird auch im Legacy-Frontend geladen (ältere Android-WebViews, z. B. Shelly Wall Display); vorher erschien dort die rote Fehlerkarte „Custom element doesn't exist“.
+- Karten-JavaScript ohne Optional Chaining / Nullish Coalescing, damit ältere Browser es parsen können.
+
 ## 1.1.0
 
 - Karte: aufeinanderfolgende Stunden mit identischer Vertretung werden zu einer Zeile zusammengefasst (z. B. `5-6. Std`). Abschaltbar über die Option `merge_lessons`.
