@@ -1,69 +1,65 @@
-# DSB Vertretungsplan für Home Assistant
+# DSB Vertretungsplan for Home Assistant
 
-Custom Integration, die den über **DSBmobile** veröffentlichten Untis-Vertretungsplan in Home Assistant bereitstellt. Der Plan wird **einmal pro Schul-Zugang** geladen; die Klasse wird erst im Dashboard oder in Automationen gefiltert. So reichen ein Zugang und ein Sensor für mehrere Kinder an derselben Schule.
+Custom integration that brings the Untis substitution plan ("Vertretungsplan") published through **DSBmobile** into Home Assistant. The plan is loaded **once per school account**; filtering by class happens on the dashboard or in automations. One account and one sensor are enough for several children at the same school.
 
-Die Integration ist eine Neuentwicklung mit dem Ziel, sich so zu verhalten, wie Home Assistant es erwartet:
-
-- **Mobile-API statt Web-Scraping.** Dieselbe tokenbasierte API wie die DSBmobile-App (`mobileapi.dsbcontrol.de`). Kein ASP.NET-Login-Formular, kein Flackern zwischen echten Daten und „keine Vertretungen“.
-- **DataUpdateCoordinator mit echter Fehlerbehandlung.** Verbindungsprobleme werden als `UpdateFailed` gemeldet, die letzten gültigen Daten bleiben erhalten und die Entitäten werden `unavailable` statt still auf 0 zu springen. Ein leerer Plan (Ferien) ist ein gültiger Zustand.
-- **Re-Auth, Reconfigure, Optionen ohne Neustart, Diagnostics-Export, Übersetzungen (de/en).**
-- **Eigene Dashboard-Karte** mit visuellem Editor, von der Integration selbst ausgeliefert.
-- **Robuster Untis-Parser.** Spalten werden anhand der Kopfzeile erkannt, `<s>alt</s> neu` und `alt?neu` als Änderung, Sammelklassen wie `08abc` werden zu `08a, 08b, 08c` aufgelöst, mehrere Tage pro Datei werden unterstützt.
+- **Mobile API, no web scraping.** Uses the same token based API as the DSBmobile app (`mobileapi.dsbcontrol.de`). No ASP.NET login form, no flapping between real data and "no substitutions".
+- **DataUpdateCoordinator with proper error handling.** Connection problems are reported as `UpdateFailed`, the last good data is kept and entities become `unavailable` instead of silently dropping to 0. An empty plan (holidays) is a valid state.
+- **Re-auth, reconfigure, options without restart, diagnostics export, translations (de/en).**
+- **Bundled dashboard card** with a visual editor, served by the integration itself.
+- **Robust Untis parser.** Columns are detected by their header, `<s>old</s> new` and `old?new` are recognised as changes, merged classes such as `08abc` are expanded to `08a, 08b, 08c`, several days per file are supported.
 
 ## Installation
 
-**HACS:** drei Punkte → Benutzerdefinierte Repositories → URL dieses Repositories, Kategorie *Integration* → installieren → Home Assistant neu starten.
+**HACS:** three dots → Custom repositories → URL of this repository, category *Integration* → install → restart Home Assistant.
 
-**Manuell:** Ordner `custom_components/dsb_vertretungsplan` nach `<config>/custom_components/` kopieren und neu starten.
+**Manual:** copy the folder `custom_components/dsb_vertretungsplan` to `<config>/custom_components/` and restart.
 
-Die alte Integration `dsbmobile` kann parallel installiert bleiben; die Domains kollidieren nicht.
+## Setup
 
-## Einrichtung
+**Settings → Devices & services → Add integration → "DSB Vertretungsplan"**, enter the user ID and password as used in the DSBmobile app. Under **Configure** you can change later:
 
-**Einstellungen → Geräte & Dienste → Integration hinzufügen → „DSB Vertretungsplan“**, Benutzer-ID und Passwort wie in der DSBmobile-App eingeben. Unter **Konfigurieren** lassen sich später einstellen:
+| Option           | Default | Meaning                                                     |
+|------------------|---------|-------------------------------------------------------------|
+| Preview in days  | 3       | The sensor contains entries from today up to N days ahead   |
+| Polling interval | 30 min  | How often DSB is queried (minimum 5 min)                    |
 
-| Option            | Standard | Bedeutung                                                   |
-|-------------------|----------|-------------------------------------------------------------|
-| Vorschau in Tagen | 3        | Der Sensor enthält Einträge von heute bis in N Tagen        |
-| Abfrageintervall  | 30 min   | Wie oft DSB abgefragt wird (Minimum 5 min)                  |
+## Entities
 
-## Entitäten
+All entities belong to the device "DSBmobile *user ID*". Entity IDs below are the German ones; with an English Home Assistant UI the suffixes are translated (`substitution_plan`, `plan_updated`, ...).
 
-Alle Entitäten hängen am Gerät „DSBmobile *Benutzer-ID*“.
+| Entity                                    | State                                    | Attributes                                                   |
+|-------------------------------------------|------------------------------------------|--------------------------------------------------------------|
+| `sensor.dsbmobile_<id>_vertretungsplan`   | number of entries (all classes, N days)  | `days` (per day: `date`, `day_label`, `count`, `info`), `classes` (all classes that have entries), `plan_days`, `plan_updated`, `from`, `to`, `days_ahead` |
+| `calendar.dsbmobile_<id>_vertretungsplan` | next entry as an all-day event           | for the calendar card and calendar triggers                  |
+| `sensor.dsbmobile_<id>_planstand`         | time the plan was last published         |                                                              |
+| `sensor.dsbmobile_<id>_nachrichten`       | number of news items                     | `news`                                                       |
+| `sensor.dsbmobile_<id>_dokumente`         | number of documents                      | `documents`                                                  |
+| `sensor.dsbmobile_<id>_plane`             | number of plans (diagnostic)             | `plans`, `plan_days`, `errors`                               |
+| `sensor.dsbmobile_<id>_letzte_abfrage`    | last successful poll (diagnostic)        |                                                              |
 
-| Entität                                   | Zustand                                  | Attribute                                                     |
-|-------------------------------------------|------------------------------------------|---------------------------------------------------------------|
-| `sensor.dsbmobile_<id>_vertretungsplan`   | Anzahl Einträge (alle Klassen, N Tage)   | `days` (je Tag: `date`, `day_label`, `count`, `info`), `classes` (alle Klassen mit Einträgen), `plan_days`, `plan_updated`, `from`, `to`, `days_ahead` |
-| `calendar.dsbmobile_<id>_vertretungsplan` | nächster Eintrag als Ganztagstermin      | für Kalender-Karte und Kalender-Trigger                       |
-| `sensor.dsbmobile_<id>_planstand`         | Zeitpunkt der letzten Plan-Veröffentlichung |                                                            |
-| `sensor.dsbmobile_<id>_nachrichten`       | Anzahl News                              | `news`                                                        |
-| `sensor.dsbmobile_<id>_dokumente`         | Anzahl Dokumente                         | `documents`                                                   |
-| `sensor.dsbmobile_<id>_plane`             | Anzahl Pläne (Diagnose)                  | `plans`, `plan_days`, `errors`                                |
-| `sensor.dsbmobile_<id>_letzte_abfrage`    | letzte erfolgreiche Abfrage (Diagnose)   |                                                               |
-
-`days` enthält **jeden Plantag im Fenster**, auch solche ohne Einträge (`count: 0`). Die Einträge selbst liegen bewusst nicht in den Attributen: Der Plan einer ganzen Schule überschreitet schnell die 16 KB, die Home Assistant für Attribute erlaubt. Die Karte holt die Einträge über den WebSocket-Befehl `dsb_vertretungsplan/entries`, Automationen über die Aktion `dsb_vertretungsplan.get_entries` (siehe unten). Ein Eintrag sieht dort so aus:
+`days` contains **every plan day inside the window**, including days without entries (`count: 0`). The entries themselves are deliberately not exposed as attributes: the plan of a whole school quickly exceeds the 16 kB Home Assistant allows for state attributes. The card fetches entries through the websocket command `dsb_vertretungsplan/entries`, automations through the action `dsb_vertretungsplan.get_entries` (see below). An entry looks like this:
 
 ```yaml
 date: "2026-10-19"
 day_label: "19.10.2026 Montag"
-type: "Vertretung"              # Art
-classes: "08abc"                # Spalte Klasse(n), wie von Untis geliefert
-class_list: ["08a", "08b", "08c"]   # aufgelöst und normalisiert
+type: "Vertretung"              # Untis column "Art"
+classes: "08abc"                # column "Klasse(n)" as delivered by Untis
+class_list: ["08a", "08b", "08c"]   # expanded and normalised
 lesson: "5"
 subject: "En"
 room: "B202"
-substitute: "Schmidt"           # Vertr. von / Vertreter
-teacher: "Meier"                # (Le.) nach / Lehrer
+substitute: "Schmidt"           # "Vertr. von" / "Vertreter"
+teacher: "Meier"                # "(Le.) nach" / "Lehrer"
 text: ""
-changes: { subject: "De", room: "A101" }   # alte Werte bei Änderungen
-columns: { "Art": "Vertretung", "(Fach)": "De → En", ... }   # alle Spalten roh
+changes: { subject: "De", room: "A101" }   # previous values of changed fields
+columns: { "Art": "Vertretung", "(Fach)": "De → En", ... }   # every column, raw
 ```
 
-## Dashboard-Karte pro Kind
+## Dashboard card per child
 
-Die Integration bringt eine eigene Lovelace-Karte mit und registriert sie automatisch; es ist kein Ressourcen-Eintrag und kein zweites HACS-Repository nötig. Im Dashboard **Karte hinzufügen → „DSB Vertretungsplan“** wählen; der visuelle Editor fragt Sensor, Klasse, Titel und ein paar Anzeigeoptionen ab. Für das zweite Kind die Karte ein zweites Mal mit anderer Klasse anlegen; beide lesen denselben Sensor.
+The integration ships its own Lovelace card and registers it automatically; no resource entry and no second HACS repository are needed. On the dashboard choose **Add card → "DSB Vertretungsplan"**; the visual editor asks for the sensor, the class, a title and a few display options. For a second child add the card again with another class; both read the same sensor.
 
-![Karte](examples/card.png)
+![Card](examples/card.png)
 
 ```yaml
 type: custom:dsb-vertretungsplan-card
@@ -71,25 +67,25 @@ entity: sensor.dsbmobile_123456_vertretungsplan
 class: "08b"
 ```
 
-| Option            | Standard | Bedeutung                                                          |
-|-------------------|----------|--------------------------------------------------------------------|
-| `entity`          |          | der Sensor „Vertretungsplan“ (Pflicht)                             |
-| `class`           | leer     | Klasse, z. B. `08b` oder `8b`; Sammelklassen wie `08abc` passen. Leer = ganze Schule |
-| `title`           | Klasse … | eigener Titel                                                      |
-| `icon`            | `mdi:school-outline` | Icon im Kopf                                           |
-| `days`            | 0        | Anzahl Tage; 0 = Fenster der Integration                           |
-| `hide_today_after`| leer     | Uhrzeit (`HH:MM`), ab der der heutige Tag ausgeblendet wird, z. B. `08:00` nach Schulbeginn. Zähler und Badge zählen dann nur die folgenden Tage |
-| `show_empty_days` | `true`   | Tage ohne Einträge als „Keine Vertretungen“ zeigen                 |
-| `show_info`       | `true`   | Tageshinweise („Nachrichten zum Tag“) zeigen                       |
-| `show_footer`     | `true`   | Planstand unten zeigen                                             |
-| `compact`         | `false`  | nur Stunde, Art und Fach                                           |
-| `merge_lessons`   | `true`   | aufeinanderfolgende Stunden mit gleichem Inhalt als eine Zeile zeigen (`5-6. Std`) |
+| Option             | Default              | Meaning                                                                   |
+|--------------------|----------------------|---------------------------------------------------------------------------|
+| `entity`           |                      | the "Vertretungsplan" sensor (required)                                   |
+| `class`            | empty                | class, e.g. `08b` or `8b`; merged classes such as `08abc` match. Empty = whole school |
+| `title`            | "Klasse …"           | custom title                                                              |
+| `icon`             | `mdi:school-outline` | header icon                                                               |
+| `days`             | 0                    | number of days; 0 = window of the integration                             |
+| `hide_today_after` | empty                | time (`HH:MM`) after which today is hidden, e.g. `08:00` once school has started. Counter and badge then only count the following days |
+| `show_empty_days`  | `true`               | show days without entries as "Keine Vertretungen"                         |
+| `show_info`        | `true`               | show the day notes ("Nachrichten zum Tag")                                |
+| `show_footer`      | `true`               | show the plan timestamp at the bottom                                     |
+| `compact`          | `false`              | lesson, type and subject only                                             |
+| `merge_lessons`    | `true`               | show consecutive lessons with identical content as one row (`5-6. Std`)   |
 
-Nach einem Update der Integration lädt der Browser die Karte über den Versions-Parameter automatisch neu; sollte sie dennoch alt aussehen, einmal die Seite hart neu laden. Findet die Karte für die eingestellte Klasse nichts, obwohl der Plan Einträge hat, zeigt sie die im Plan vorkommenden Klassen an, so lässt sich die Schreibweise der Schule schnell abgleichen.
+After an update of the integration the browser reloads the card through the version query parameter; should it still look old, hard-reload the page once. If the card finds nothing for the configured class although the plan has entries, it lists the classes present in the plan so the school's spelling can be checked quickly.
 
-## Aktion `dsb_vertretungsplan.get_entries`
+## Action `dsb_vertretungsplan.get_entries`
 
-Liefert die Einträge der kommenden Tage, optional für eine Klasse, als Rückgabewert. Praktisch für Benachrichtigungen pro Kind:
+Returns the entries of the coming days, optionally for one class, as a response. Handy for per-child notifications:
 
 ```yaml
 triggers:
@@ -105,29 +101,29 @@ actions:
       - condition: template
         value_template: "{{ plan.count > 0 }}"
     then:
-      - action: notify.mobile_app_handy
+      - action: notify.mobile_app_phone
         data:
-          title: "Vertretungsplan 08b heute"
+          title: "Vertretungsplan 08b today"
           message: >-
             {% for e in plan.entries -%}
             {{ e.lesson }}. Std {{ e.type }} {{ e.subject }}{{ ' (' ~ e.text ~ ')' if e.text }}
             {% endfor %}
 ```
 
-Rückgabe: `class_name`, `from`, `to`, `count`, `classes`, `plan_updated`, `entries` (flach) und `days` (nach Tag gruppiert, jeweils mit `entries`). Mit `days_ahead` lässt sich das Fenster pro Aufruf überschreiben; `config_entry` ist nur bei mehreren DSB-Zugängen nötig.
+Response: `class_name`, `from`, `to`, `count`, `classes`, `plan_updated`, `entries` (flat) and `days` (grouped by day, each with `entries`). `days_ahead` overrides the window per call; `config_entry` is only needed with several DSB accounts.
 
-## Fehlersuche
+## Troubleshooting
 
-Ohne Home Assistant prüfen, ob Login und Parser mit der eigenen Schule funktionieren (läuft ab Python 3.9):
+Check login and parser against your school without Home Assistant (runs on Python 3.9 and newer):
 
 ```bash
 python3 -m pip install aiohttp beautifulsoup4
-python3 scripts/dsb_check.py BENUTZER PASSWORT 08b
+python3 scripts/dsb_check.py USER PASSWORD 08b
 ```
 
-Das Skript zeigt alle Pläne, die erkannten Einträge samt `class_list` und speichert das rohe HTML als `scripts/plan_<n>.html`. Falls die Spalten der Schule nicht erkannt werden, hilft diese Datei beim Anpassen von `parser.py` (Tabelle `_HEADER_MAP`).
+The script prints all plans, the parsed entries including `class_list`, and saves the raw HTML as `scripts/plan_<n>.html`. If the school's columns are not recognised, that file helps adapting `parser.py` (table `_HEADER_MAP`).
 
-Debug-Protokoll in Home Assistant:
+Debug log in Home Assistant:
 
 ```yaml
 logger:
@@ -135,7 +131,7 @@ logger:
     custom_components.dsb_vertretungsplan: debug
 ```
 
-**Geräte & Dienste → DSB Vertretungsplan → Diagnose herunterladen** liefert alle abgerufenen Daten (Zugangsdaten und URLs geschwärzt).
+**Devices & services → DSB Vertretungsplan → Download diagnostics** contains all fetched data (credentials and URLs redacted).
 
 ## Tests
 
