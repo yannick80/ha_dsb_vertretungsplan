@@ -224,6 +224,7 @@ async def test_card_is_served_and_registered(
     client = await hass_client()
     response = await client.get(CARD_URL)
     assert response.status == 200
+    assert "Cache-Control" in response.headers
     body = await response.text()
     assert "customElements.define(CARD_TAG, DsbVertretungsplanCard)" in body
     assert hass.states.get(PLAN).attributes["plan_updated"] is not None

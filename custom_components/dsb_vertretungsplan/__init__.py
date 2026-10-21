@@ -159,8 +159,13 @@ async def _async_register_card(hass: HomeAssistant) -> None:
     after an update.
     """
     card_path = Path(__file__).parent / "www" / CARD_FILENAME
+    # Cache headers on: the version query string below changes with every
+    # release, so browsers pick up updates, and reloads on slow devices
+    # (wall displays, phone apps) do not have to re-download the card each
+    # time, which could otherwise exceed the frontend's wait for the
+    # custom element and show a "configuration error" card.
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_URL, str(card_path), cache_headers=False)]
+        [StaticPathConfig(CARD_URL, str(card_path), cache_headers=True)]
     )
     version = (await async_get_integration(hass, DOMAIN)).version or "0"
     # Register for both frontend builds: browsers that do not meet the

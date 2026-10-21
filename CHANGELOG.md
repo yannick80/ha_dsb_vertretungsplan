@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1
+
+- Card file is served with cache headers (updates still arrive through the version query string). Slow devices such as wall displays and phone apps no longer re-download it on every reload, which could trip the frontend's wait for the custom element and show a "configuration error" card.
+- Card: render errors are caught and shown inside the card instead of propagating into Home Assistant's error card; day data from the server is normalised before use.
+
 ## 1.2.0
 
 - Card: new option `hide_today_after` (time). From that time on, today is hidden, e.g. once school has started; the card re-checks every minute without a reload.

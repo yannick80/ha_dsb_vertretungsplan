@@ -12,7 +12,7 @@
 
 const CARD_TAG = "dsb-vertretungsplan-card";
 const EDITOR_TAG = "dsb-vertretungsplan-card-editor";
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.2.1";
 
 const CLASS_RE = /^(\d{1,2})([a-zäöü]*)$/;
 const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
@@ -322,13 +322,31 @@ class DsbVertretungsplanCard extends HTMLElement {
 
   _days() {
     if (!this._data || !this._config) return [];
-    const days = Array.isArray(this._data.days) ? this._data.days : [];
+    let days = Array.isArray(this._data.days) ? this._data.days : [];
+    days = days.map((d) => ({
+      ...d,
+      entries: Array.isArray(d.entries) ? d.entries : [],
+      info: Array.isArray(d.info) ? d.info : [],
+    }));
     if (!this._hideToday()) return days;
     const today = localToday();
     return days.filter((d) => d.date !== today);
   }
 
   _render() {
+    try {
+      this._renderUnsafe();
+    } catch (err) {
+      if (!this.shadowRoot) return;
+      const message = (err && err.message) || String(err);
+      this.shadowRoot.innerHTML = `<style>${CARD_STYLE}</style><ha-card>
+        <div class="warning" style="margin:16px"><ha-icon icon="mdi:bug-outline"></ha-icon>
+        <div>Fehler in der Karte: ${escapeHtml(message)}</div></div></ha-card>`;
+      console.error("dsb-vertretungsplan-card render failed", err);
+    }
+  }
+
+  _renderUnsafe() {
     if (!this.shadowRoot || !this._config) return;
     const cfg = this._config;
     const state = this._state;
