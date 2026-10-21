@@ -207,19 +207,20 @@ async def test_unload(hass: HomeAssistant, mock_client: AsyncMock) -> None:
     assert entry.state is ConfigEntryState.NOT_LOADED
 
 
-async def test_card_is_served_and_registered(
+async def test_card_is_served_and_registered_as_resource(
     hass: HomeAssistant, mock_client: AsyncMock, hass_client
 ) -> None:
-    """The bundled Lovelace card is served by HA and loaded as extra module."""
-    from homeassistant.components.frontend import DATA_EXTRA_JS_URL_ES5, DATA_EXTRA_MODULE_URL
+    """The bundled card is served by HA and registered as a Lovelace resource."""
+    from homeassistant.components.lovelace import LOVELACE_DATA
 
     from custom_components.dsb_vertretungsplan.const import CARD_URL
 
     await _setup(hass, _entry())
-    urls = {u.split("?")[0] for u in hass.data[DATA_EXTRA_MODULE_URL].urls}
-    assert CARD_URL in urls
-    legacy_urls = {u.split("?")[0] for u in hass.data[DATA_EXTRA_JS_URL_ES5].urls}
-    assert CARD_URL in legacy_urls  # older WebViews get the legacy frontend build
+    resources = hass.data[LOVELACE_DATA].resources
+    ours = [r for r in resources.async_items() if r["url"].startswith(CARD_URL)]
+    assert len(ours) == 1
+    assert ours[0]["type"] == "module"
+    assert ours[0]["url"].endswith("?v=" + _manifest_version())
 
     client = await hass_client()
     response = await client.get(CARD_URL)
@@ -228,6 +229,57 @@ async def test_card_is_served_and_registered(
     body = await response.text()
     assert "customElements.define(CARD_TAG, DsbVertretungsplanCard)" in body
     assert hass.states.get(PLAN).attributes["plan_updated"] is not None
+
+
+async def test_card_resource_is_updated_not_duplicated(
+    hass: HomeAssistant, mock_client: AsyncMock
+) -> None:
+    """A stale resource entry from an older version is updated in place."""
+    from homeassistant.components.lovelace import LOVELACE_DATA
+    from homeassistant.setup import async_setup_component
+
+    from custom_components.dsb_vertretungsplan.const import CARD_URL
+
+    assert await async_setup_component(hass, "lovelace", {})
+    resources = hass.data[LOVELACE_DATA].resources
+    await resources.async_load()
+    resources.loaded = True
+    await resources.async_create_item({"res_type": "module", "url": f"{CARD_URL}?v=0.0.1"})
+    await resources.async_create_item({"res_type": "js", "url": f"{CARD_URL}?v=0.0.2"})
+    await resources.async_create_item({"res_type": "module", "url": "/hacsfiles/other.js"})
+
+    await _setup(hass, _entry())
+    items = resources.async_items()
+    ours = [r for r in items if r["url"].startswith(CARD_URL)]
+    assert len(ours) == 1
+    assert ours[0]["url"] == f"{CARD_URL}?v={_manifest_version()}"
+    assert ours[0]["type"] == "module"
+    assert any(r["url"] == "/hacsfiles/other.js" for r in items)
+
+
+async def test_card_falls_back_to_extra_script_in_yaml_mode(
+    hass: HomeAssistant, mock_client: AsyncMock
+) -> None:
+    """With YAML managed resources the card is loaded as an extra script."""
+    from homeassistant.components.frontend import DATA_EXTRA_JS_URL_ES5, DATA_EXTRA_MODULE_URL
+    from homeassistant.setup import async_setup_component
+
+    from custom_components.dsb_vertretungsplan.const import CARD_URL
+
+    assert await async_setup_component(hass, "lovelace", {"lovelace": {"mode": "yaml"}})
+    await _setup(hass, _entry())
+    urls = {u.split("?")[0] for u in hass.data[DATA_EXTRA_MODULE_URL].urls}
+    legacy = {u.split("?")[0] for u in hass.data[DATA_EXTRA_JS_URL_ES5].urls}
+    assert CARD_URL in urls
+    assert CARD_URL in legacy
+
+
+def _manifest_version() -> str:
+    import json
+    from pathlib import Path
+
+    manifest = Path(__file__).parents[1] / "custom_components/dsb_vertretungsplan/manifest.json"
+    return json.loads(manifest.read_text())["version"]
 
 
 async def test_websocket_entries(

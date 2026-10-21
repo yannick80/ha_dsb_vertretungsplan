@@ -18,8 +18,17 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace import LOVELACE_DATA
+from homeassistant.components.lovelace.const import CONF_RESOURCE_TYPE_WS
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.const import (
+    CONF_ID,
+    CONF_PASSWORD,
+    CONF_TYPE,
+    CONF_URL,
+    CONF_USERNAME,
+    Platform,
+)
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
@@ -151,29 +160,61 @@ def ws_get_entries(
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:
-    """Serve the bundled dashboard card and load it on every dashboard.
+    """Serve the bundled dashboard card and make every dashboard load it.
 
-    The card lives in www/ next to this file. Serving it from the
-    integration means no manual resource entry and no separate HACS
-    frontend repository; the version query string busts browser caches
-    after an update.
+    The card lives in www/ next to this file. It is registered as a
+    Lovelace *resource* (the same mechanism HACS uses): the frontend loads
+    resources deliberately before it builds the cards, so slow devices do
+    not hit "Custom element doesn't exist". Only when resources are managed
+    in YAML (no storage collection) the card falls back to a plain extra
+    script tag, which the frontend loads without waiting for it.
     """
     card_path = Path(__file__).parent / "www" / CARD_FILENAME
-    # Cache headers on: the version query string below changes with every
-    # release, so browsers pick up updates, and reloads on slow devices
-    # (wall displays, phone apps) do not have to re-download the card each
-    # time, which could otherwise exceed the frontend's wait for the
-    # custom element and show a "configuration error" card.
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL, str(card_path), cache_headers=True)]
     )
     version = (await async_get_integration(hass, DOMAIN)).version or "0"
-    # Register for both frontend builds: browsers that do not meet the
-    # requirements of the modern build (older Android WebViews on wall
-    # displays, for example) get the legacy build, which only loads
-    # resources registered with es5=True.
-    add_extra_js_url(hass, f"{CARD_URL}?v={version}")
-    add_extra_js_url(hass, f"{CARD_URL}?v={version}", es5=True)
+    url = f"{CARD_URL}?v={version}"
+
+    if await _async_register_lovelace_resource(hass, url):
+        return
+    _LOGGER.debug("Lovelace resources not in storage mode, using extra script tag")
+    add_extra_js_url(hass, url)
+    add_extra_js_url(hass, url, es5=True)
+
+
+async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> bool:
+    """Create or update the Lovelace resource entry for the card.
+
+    Returns False when resources are not managed in storage mode.
+    """
+    lovelace = hass.data.get(LOVELACE_DATA)
+    if lovelace is None or lovelace.resource_mode != "storage":
+        return False
+    resources = lovelace.resources
+    if not resources.loaded:
+        await resources.async_load()
+        resources.loaded = True
+
+    ours = [
+        item
+        for item in resources.async_items()
+        if str(item.get(CONF_URL, "")).split("?", 1)[0] == CARD_URL
+    ]
+    if not ours:
+        _LOGGER.info("Registering dashboard card resource %s", url)
+        await resources.async_create_item({CONF_RESOURCE_TYPE_WS: "module", CONF_URL: url})
+        return True
+    first, *duplicates = ours
+    # Stored items carry the type under "type"; create/update expect "res_type".
+    if first.get(CONF_URL) != url or first.get(CONF_TYPE) != "module":
+        _LOGGER.info("Updating dashboard card resource to %s", url)
+        await resources.async_update_item(
+            first[CONF_ID], {CONF_RESOURCE_TYPE_WS: "module", CONF_URL: url}
+        )
+    for item in duplicates:
+        await resources.async_delete_item(item[CONF_ID])
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: DSBConfigEntry) -> bool:

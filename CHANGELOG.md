@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2
+
+- The card is now registered as a Lovelace dashboard resource (storage mode), the same mechanism HACS uses. The frontend loads resources before it builds cards, which fixes the intermittent "Custom element doesn't exist: dsb-vertretungsplan-card" on slow devices and in the companion apps. The entry is created and updated automatically; with YAML managed resources the previous extra-script loading is used.
+
 ## 1.2.1
 
 - Card file is served with cache headers (updates still arrive through the version query string). Slow devices such as wall displays and phone apps no longer re-download it on every reload, which could trip the frontend's wait for the custom element and show a "configuration error" card.

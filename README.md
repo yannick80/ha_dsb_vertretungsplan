@@ -57,7 +57,7 @@ columns: { "Art": "Vertretung", "(Fach)": "De → En", ... }   # every column, r
 
 ## Dashboard card per child
 
-The integration ships its own Lovelace card and registers it automatically; no resource entry and no second HACS repository are needed. On the dashboard choose **Add card → "DSB Vertretungsplan"**; the visual editor asks for the sensor, the class, a title and a few display options. For a second child add the card again with another class; both read the same sensor.
+The integration ships its own Lovelace card and registers it automatically as a dashboard resource (visible under Settings → Dashboards → Resources, do not remove it); no manual resource entry and no second HACS repository are needed. If your resources are managed in YAML (`lovelace: resource_mode: yaml`), the card is loaded as an extra script instead. On the dashboard choose **Add card → "DSB Vertretungsplan"**; the visual editor asks for the sensor, the class, a title and a few display options. For a second child add the card again with another class; both read the same sensor.
 
 ![Card](examples/card.png)
 
